@@ -1,131 +1,299 @@
 # Retail AI Assistant
 
-FastAPI and CLI implementation for the simulation-based retail AI assignment.
+A simulation-based agentic AI project for retail shopping and customer support workflows.
 
-## What This Project Does
+The assistant acts as a single intelligent agent with two business roles:
 
-- Uses one tool-calling agent for shopping and support use cases
-- Reads product, order, and policy data from local files
-- Exposes a FastAPI `POST /chat` endpoint
-- Includes a simple CLI for demos
-- Keeps return reasoning deterministic inside `evaluate_return(order_id)`
+- Personal Shopper: recommends products using price, size, stock, tags, sale status, and bestseller score.
+- Customer Support Assistant: evaluates orders against return policy rules and explains return eligibility.
 
-## Project Data Files
+The project uses local CSV/text files for product, order, and policy data. No external store integration is required.
 
-The assignment data files are stored inside the project:
+## Why Hugging Face
 
-- `Retail AI Assistant\data\product_inventory.csv`
-- `Retail AI Assistant\data\orders.csv`
-- `Retail AI Assistant\data\policy.txt`
+This project uses the Hugging Face Inference Router for LLM calls because it is practical for development and testing without requiring OpenAI API billing. Hugging Face provides an OpenAI-compatible chat endpoint, so the project can use tool/function calling while keeping development cost low.
 
-You can still override them with environment variables if needed:
+The app uses:
 
-- `PRODUCTS_CSV_PATH`
-- `ORDERS_CSV_PATH`
-- `POLICY_PATH`
+```text
+https://router.huggingface.co/v1
+```
+
+Default model:
+
+```text
+openai/gpt-oss-120b:fastest
+```
+
+The `:fastest` suffix lets Hugging Face choose an available fast provider automatically.
+
+## Features
+
+- Single agent for shopping and support use cases
+- Structured tool/function calling
+- Product recommendations based on multiple business constraints
+- Deterministic return evaluation through Python code
+- Local project data files in `data/`
+- FastAPI chat endpoint
+- CLI mode for quick demos
+- Fallback JSON response when the Hugging Face provider is unavailable
+- Test coverage for tools, return engine, and chat API behavior
+
+## Required Tools
+
+The model dynamically chooses from these structured tools:
+
+```text
+search_products(filters)
+get_product(product_id)
+get_order(order_id)
+evaluate_return(order_id)
+```
+
+Tool implementations are registered in:
+
+```text
+app/tools/registry.py
+```
+
+## Project Structure
+
+```text
+Retail AI Assistant/
+|-- app/
+|   |-- agent/
+|   |   |-- orchestrator.py      # LLM agent loop and tool-calling flow
+|   |   `-- prompts.py           # System prompt and behavior rules
+|   |-- api/
+|   |   `-- routes/
+|   |       `-- chat.py          # FastAPI /chat and /health routes
+|   |-- repositories/
+|   |   |-- product_repository.py
+|   |   |-- order_repository.py
+|   |   `-- policy_repository.py
+|   |-- schemas/
+|   |   |-- chat.py              # API request/response schemas
+|   |   |-- domain.py            # Product, order, and result models
+|   |   `-- tools.py             # Tool argument schemas
+|   |-- services/
+|   |   `-- return_engine.py     # Deterministic return-policy logic
+|   |-- tools/
+|   |   |-- product_tools.py     # Product search and lookup tools
+|   |   |-- order_tools.py       # Order lookup and return tools
+|   |   `-- registry.py          # Tool definitions exposed to the model
+|   |-- utils/
+|   |   `-- parsers.py           # CSV and policy parsing helpers
+|   |-- config.py                # Environment and data-path settings
+|   |-- container.py             # Application dependency container
+|   `-- main.py                  # FastAPI app factory
+|-- data/
+|   |-- product_inventory.csv    # Product inventory data
+|   |-- orders.csv               # Customer order data
+|   |-- policy.txt               # Return policy text
+|   `-- README.txt
+|-- docs/
+|   `-- architecture.md          # Architecture explanation
+|-- tests/
+|   |-- test_chat_api.py
+|   |-- test_product_tools.py
+|   `-- test_return_engine.py
+|-- cli.py                       # CLI entrypoint
+|-- main.py                      # Uvicorn import target
+|-- requirements.txt
+`-- README.md
+```
+
+## Data Files
+
+The assignment data is stored inside the project:
+
+```text
+data/product_inventory.csv
+data/orders.csv
+data/policy.txt
+```
+
+You can override these paths with environment variables if needed:
+
+```text
+PRODUCTS_CSV_PATH
+ORDERS_CSV_PATH
+POLICY_PATH
+```
 
 ## Setup
 
-This project is currently set up with a local `.venv` folder. The available interpreter on this machine is Python 3.8, so `requirements.txt` includes a small compatibility package for the newer type annotations used by the app.
+From PowerShell:
 
-Create and activate the project-local virtual environment:
-
-```bash
+```powershell
+cd "c:\python_projects\Retail AI Assistant"
 python -m venv .venv
-.venv\Scripts\activate
-```
-
-Install dependencies inside the activated virtual environment:
-
-```bash
+.\.venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-The `.venv` folder is local to this project and keeps installed packages isolated from your global Python environment.
+The `.venv` folder keeps dependencies isolated from the global Python installation.
 
 ## Environment Variables
 
-The app loads environment variables from a local `.env` file. A starter `.env` file is included with placeholder values:
+Create or update `.env` in the project root:
 
-```bash
+```env
 HUGGINGFACE_API_KEY=replace_with_your_huggingface_token
 HUGGINGFACE_MODEL=openai/gpt-oss-120b:fastest
 HUGGINGFACE_BASE_URL=https://router.huggingface.co/v1
 ```
 
-Replace `replace_with_your_huggingface_token` with your Hugging Face token before running the API or CLI.
+Replace `replace_with_your_huggingface_token` with your real Hugging Face access token.
 
-Recommended Hugging Face model:
+The deterministic tests can run without a Hugging Face token. The CLI and `/chat` endpoint require the token because they call the LLM.
 
-- `openai/gpt-oss-120b:fastest` is the default because Hugging Face lists `openai/gpt-oss-120b` as a strong chat model with tool-calling capability, which this project needs for `search_products`, `get_product`, `get_order`, and `evaluate_return`. The `:fastest` suffix lets Hugging Face choose an available fast provider automatically.
+## Run the API
 
-Alternative models to try if the default is unavailable or too costly:
-
-- `Qwen/Qwen2.5-7B-Instruct-1M` for a smaller long-context instruction model.
-- `Qwen/Qwen3-4B-Thinking-2507` for a smaller reasoning-focused model.
-
-This project does require a Hugging Face API key for the assistant features. The `POST /chat` endpoint and `cli.py` call Hugging Face through its OpenAI-compatible chat endpoint. The deterministic repository/tool tests can run without an LLM key.
-
-If Hugging Face is unavailable, `/chat` returns a fallback JSON response with an explanatory `answer` and a `tool_trace` entry describing the provider error.
-
-## Run The API
-
-```bash
+```powershell
+cd "c:\python_projects\Retail AI Assistant"
+.\.venv\Scripts\activate
 uvicorn main:app --reload
 ```
 
-Swagger UI:
+Open Swagger UI:
 
-- `http://127.0.0.1:8000/docs`
-
-## Run The CLI
-
-Single prompt:
-
-```bash
-python cli.py "I need a modest evening gown under 300 dollars in size 8 and I prefer sale items."
+```text
+http://127.0.0.1:8000/docs
 ```
+
+Health check:
+
+```text
+GET http://127.0.0.1:8000/health
+```
+
+Chat endpoint:
+
+```text
+POST http://127.0.0.1:8000/chat
+```
+
+Example request:
+
+```json
+{
+  "message": "I need a modest evening gown under $300 in size 8. I prefer something on sale."
+}
+```
+
+## Run the CLI
 
 Interactive mode:
 
-```bash
+```powershell
 python cli.py
+```
+
+Single prompt:
+
+```powershell
+python cli.py "I need a modest evening gown under $300 in size 8. I prefer something on sale."
 ```
 
 Show tool activity:
 
-```bash
+```powershell
 python cli.py --show-tools
+```
+
+## Example Questions
+
+Product recommendation:
+
+```text
+I need a modest evening gown under $300 in size 8. I prefer something on sale.
+```
+
+Product lookup:
+
+```text
+Show me product P0001.
+```
+
+Order lookup:
+
+```text
+Get order O0005.
+```
+
+Return decision:
+
+```text
+Order O0005 does not fit. Can I return it?
+```
+
+Missing order:
+
+```text
+Can I return order O9999?
 ```
 
 ## Run Tests
 
-```bash
-pytest
+```powershell
+cd "c:\python_projects\Retail AI Assistant"
+.\.venv\Scripts\activate
+python -m pytest
 ```
 
-## Key Assignment Features
+Expected result:
 
-- Required tools are implemented:
-  - `search_products(filters)`
-  - `get_product(product_id)`
-  - `get_order(order_id)`
-  - `evaluate_return(order_id)`
-- Shopping recommendations consider:
-  - price
-  - tags
-  - requested size
-  - stock for that size
-  - sale status
-  - bestseller score
-- Return decisions use:
-  - order data
-  - product attributes
-  - policy text
-- The agent refuses missing orders or products instead of guessing
+```text
+6 passed
+```
 
-## Notes
+Run with verbose output:
 
-- The CSV and policy parsers are intentionally flexible because real classroom data files often vary in formatting.
-- `evaluate_return` is deterministic so the model does not hallucinate policy decisions.
+```powershell
+python -m pytest -v
+```
+
+## How Hallucination Is Minimized
+
+- The model must use tools for product, order, stock, and policy facts.
+- Product and order data is read from local files, not invented by the model.
+- Return decisions are made by `evaluate_return(order_id)` using deterministic Python logic.
+- Missing products and orders return structured not-found responses.
+- The API response includes `tool_trace`, so tool activity can be inspected.
+
+## Fallback Behavior
+
+If Hugging Face is unavailable, `/chat` returns a normal JSON response instead of crashing:
+
+```json
+{
+  "answer": "I cannot complete this chat request right now because the Hugging Face LLM provider is unavailable...",
+  "tool_trace": [
+    {
+      "tool_name": "fallback",
+      "arguments": {},
+      "result": {
+        "provider": "huggingface",
+        "error_type": "...",
+        "detail": "..."
+      }
+    }
+  ]
+}
+```
+
+## Architecture Document
+
+See:
+
+```text
+docs/architecture.md
+```
+
+It explains:
+
+- why the agent is structured this way
+- how hallucination is minimized
+- how tools are selected dynamically
