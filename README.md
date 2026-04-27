@@ -431,3 +431,13 @@ It explains:
 - why the agent is structured this way
 - how hallucination is minimized
 - how tools are selected dynamically
+
+## Demo Video Guide
+
+Use this file to prepare the required project walkthrough video:
+
+```text
+docs/demo_script.md
+```
+
+It includes the recording flow, exact prompts, talking points, expected behavior, and the required edge case.
